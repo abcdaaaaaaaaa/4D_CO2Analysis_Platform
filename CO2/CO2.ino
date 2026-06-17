@@ -1,3 +1,6 @@
+// ESP32 Wrover Module
+// Partition Scheme: "Huge APP (3MB No OTA/1MB SPIFFS)"
+
 #include "MG811.h"
 #include <DHT.h>
 #include <WiFi.h>
@@ -128,4 +131,3 @@ long round2(float x) {
 long round4(float x) {
   return round(x * 10000);
 }
-
