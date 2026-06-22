@@ -4,7 +4,8 @@
 #include "MG811.h"
 #include <DHT.h>
 #include <WiFi.h>
-#include <ThingSpeak.h>
+#include <HTTPClient.h>
+#include <NetworkClientSecure.h>
 #include <Deneyap_GPSveGLONASSkonumBelirleyici.h>
 
 #define ADC_BIT_RESU (12)
@@ -13,14 +14,11 @@
 
 const char* ssid = "REPLACE_WITH_YOUR_SSID";  
 const char* password = "REPLACE_WITH_YOUR_PASSWORD";
-
-unsigned long int hello1 = 1;
-unsigned long int hello2 = 2;
+const char* serverName = "https://co2.uzay.info/datareceiver.php";
 
 static const char* myWriteAPIKey1 = "PWIFQRC3WHDW6YG5";
 static const char* myWriteAPIKey2 = "AML2X6TU1PFQ8DUB";
 
-WiFiClient client;
 GPS GPS;
 
 float startTime = 0;
@@ -37,6 +35,7 @@ DHT dht(dhtPin, DHT22);
 long round2(float x);
 long round4(float x);
 void sendData();
+void postData(String httpRequestData);
 
 void setup() {
   Serial.begin(115200);
@@ -49,8 +48,6 @@ void setup() {
     delay(500);
     Serial.print(".");
   }
-
-  ThingSpeak.begin(client);
 
   if (!GPS.begin(0x2F)) {
     delay(3000);
@@ -107,21 +104,37 @@ void sendData() {
   long lat = (long)((GPS.readLocationLat() + 90.0) * 10000000);
   long lng = (long)((GPS.readLocationLng() + 180.0) * 10000000);
 
-  ThingSpeak.setField(1, round2(Time));
-  ThingSpeak.setField(2, round4(Correction));
-  ThingSpeak.setField(3, round2(TheoreticalCO2));
-  ThingSpeak.setField(4, round2(CO2));
-  ThingSpeak.setField(5, round2(CH4));
-  ThingSpeak.setField(6, round2(C2H5OH));
-  ThingSpeak.setField(7, round2(CO));
-  ThingSpeak.setField(8, Gas);
-  ThingSpeak.writeFields(hello1, myWriteAPIKey1);
+  String request1 = "api_key=" + String(myWriteAPIKey1) + 
+                    "&field1=" + String(round2(Time)) + 
+                    "&field2=" + String(round4(Correction)) + 
+                    "&field3=" + String(round2(TheoreticalCO2)) + 
+                    "&field4=" + String(round2(CO2)) + 
+                    "&field5=" + String(round2(CH4)) + 
+                    "&field6=" + String(round2(C2H5OH)) + 
+                    "&field7=" + String(round2(CO)) + 
+                    "&field8=" + String(Gas);
+  postData(request1);
 
-  ThingSpeak.setField(1, (temp + 140) * 10);
-  ThingSpeak.setField(2, (rh + 100) * 10);
-  ThingSpeak.setField(3, lat);
-  ThingSpeak.setField(4, lng);
-  ThingSpeak.writeFields(hello2, myWriteAPIKey2);
+  String request2 = "api_key=" + String(myWriteAPIKey2) + 
+                    "&field1=" + String((long)((temp + 140) * 10)) + 
+                    "&field2=" + String((long)((rh + 100) * 10)) + 
+                    "&field3=" + String(lat) + 
+                    "&field4=" + String(lng);
+  postData(request2);
+}
+
+void postData(String httpRequestData) {
+  NetworkClientSecure *client = new NetworkClientSecure;
+  if(client) {
+      client->setInsecure();
+      HTTPClient http;
+      if (http.begin(*client, serverName)) {
+          http.addHeader("Content-Type", "application/x-www-form-urlencoded");
+          int httpResponseCode = http.POST(httpRequestData);
+          http.end();
+      }
+      delete client;
+  }
 }
 
 long round2(float x) {
