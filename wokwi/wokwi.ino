@@ -15,8 +15,7 @@ const char* ssid = "Wokwi-GUEST";
 const char* password = ""; 
 const char* serverName = "https://co2.uzay.info/datareceiver.php";
 
-static const char* myWriteAPIKey1 = "PWIFQRC3WHDW6YG5";
-static const char* myWriteAPIKey2 = "AML2X6TU1PFQ8DUB";
+static const char* myWriteAPIKey = "PWIFQRC3WHDW6YG5";
 
 HardwareSerial neogps(2); 
 TinyGPSPlus gps;
@@ -54,6 +53,10 @@ void setup() {
 }
 
 void loop() {
+  while (neogps.available() > 0) {
+    gps.encode(neogps.read());
+  }
+
   temp = dht.readTemperature();
   rh = dht.readHumidity();
   sensorVal = sensor.read();
@@ -97,35 +100,30 @@ void sendData() {
 
   Gas = analogRead(gasPin);
 
-  lat  = String((random(-90, 90) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 90) * pow(10,6)); 
-  lng = String((random(-180, 180) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 180) * pow(10,6)); 
-  if (neogps.available()) {
-    char c = neogps.read();
-    if (gps.encode(c)) {
-      if (gps.location.isValid()) {
-        lat  = String((gps.location.lat() + 90) * pow(10, 7)); 
-        lng = String((gps.location.lng() + 180) * pow(10, 7)); 
-      }
-    }
+  if (gps.location.isValid()) {
+    lat = String((long)((gps.location.lat() + 90.0) * 10000000.0));
+    lng = String((long)((gps.location.lng() + 180.0) * 10000000.0));
+  } else {
+    long r_lat = (long)((random(-90, 90) + (random(0, 1000000) / 10000000.0) + 90.0) * 10000000.0);
+    long r_lng = (long)((random(-180, 180) + (random(0, 1000000) / 10000000.0) + 180.0) * 10000000.0);
+    lat = String(r_lat);
+    lng = String(r_lng);
   }
 
-  String request1 = "api_key=" + String(myWriteAPIKey1) + 
-                    "&field1=" + String(round2(Time)) + 
-                    "&field2=" + String(round4(Correction)) + 
-                    "&field3=" + String(round2(TheoreticalCO2)) + 
-                    "&field4=" + String(round2(CO2)) + 
-                    "&field5=" + String(round2(CH4)) + 
-                    "&field6=" + String(round2(C2H5OH)) + 
-                    "&field7=" + String(round2(CO)) + 
-                    "&field8=" + String(Gas);
-  postData(request1);
-
-  String request2 = "api_key=" + String(myWriteAPIKey2) + 
-                    "&field1=" + String((long)((temp + 140) * 10)) + 
-                    "&field2=" + String((long)((rh + 100) * 10)) + 
-                    "&field3=" + lat + 
-                    "&field4=" + lng;
-  postData(request2);
+  String request = "api_key=" + String(myWriteAPIKey) + 
+                   "&field1=" + String(round2(Time)) + 
+                   "&field2=" + String(round4(Correction)) + 
+                   "&field3=" + String(round2(TheoreticalCO2)) + 
+                   "&field4=" + String(round2(CO2)) + 
+                   "&field5=" + String(round2(CH4)) + 
+                   "&field6=" + String(round2(C2H5OH)) + 
+                   "&field7=" + String(round2(CO)) + 
+                   "&field8=" + String(Gas) +
+                   "&field9=" + String((long)((temp + 140) * 10)) + 
+                   "&field10=" + String((long)((rh + 100) * 10)) + 
+                   "&field11=" + lat + 
+                   "&field12=" + lng;
+  postData(request);
 }
 
 void postData(String httpRequestData) {
