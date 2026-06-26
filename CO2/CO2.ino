@@ -4,22 +4,22 @@
 #include "MG811.h"
 #include <DHT.h>
 #include <WiFi.h>
+#include <TinyGPS++.h>
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
-#include <Deneyap_GPSveGLONASSkonumBelirleyici.h>
 
 #define ADC_BIT_RESU (12)
 #define gasPin       (34)
 #define dhtPin       (33)
 
-const char* ssid = "REPLACE_WITH_YOUR_SSID";  
-const char* password = "REPLACE_WITH_YOUR_PASSWORD";
+const char* ssid = "Wokwi-GUEST";  
+const char* password = ""; 
 const char* serverName = "https://co2.uzay.info/datareceiver.php";
 
-static const char* myWriteAPIKey1 = "PWIFQRC3WHDW6YG5";
-static const char* myWriteAPIKey2 = "AML2X6TU1PFQ8DUB";
+static const char* myWriteAPIKey = "PWIFQRC3WHDW6YG5";
 
-GPS GPS;
+HardwareSerial neogps(2); 
+TinyGPSPlus gps;
 
 float startTime = 0;
 
@@ -28,6 +28,7 @@ bool windowLock = false;
 
 float sensorVal, CO2, CH4, C2H5OH, CO, TheoreticalCO2, temp, rh, Time, Correction;
 int Gas;
+String lat, lng;
 
 MG811 sensor(ADC_BIT_RESU, gasPin);
 DHT dht(dhtPin, DHT22);
@@ -44,16 +45,12 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
+  while(WiFi.status() != WL_CONNECTED) { 
     delay(500);
     Serial.print(".");
   }
 
-  if (!GPS.begin(0x2F)) {
-    delay(3000);
-    Serial.println("I2C connection failed."); 
-    // while(1);
-  }
+  neogps.begin(9600, SERIAL_8N1, RX2, TX2);
 }
 
 void loop() {
@@ -100,27 +97,32 @@ void sendData() {
 
   Gas = analogRead(gasPin);
 
-  GPS.readGPS(RMC);
-  long lat = (long)((GPS.readLocationLat() + 90.0) * 10000000);
-  long lng = (long)((GPS.readLocationLng() + 180.0) * 10000000);
+  lat  = String((random(-90, 90) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 90) * pow(10,6)); 
+  lng = String((random(-180, 180) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 180) * pow(10,6)); 
+  if (neogps.available()) {
+    char c = neogps.read();
+    if (gps.encode(c)) {
+      if (gps.location.isValid()) {
+        lat  = String((gps.location.lat() + 90) * pow(10, 7)); 
+        lng = String((gps.location.lng() + 180) * pow(10, 7)); 
+      }
+    }
+  }
 
-  String request1 = "api_key=" + String(myWriteAPIKey1) + 
-                    "&field1=" + String(round2(Time)) + 
-                    "&field2=" + String(round4(Correction)) + 
-                    "&field3=" + String(round2(TheoreticalCO2)) + 
-                    "&field4=" + String(round2(CO2)) + 
-                    "&field5=" + String(round2(CH4)) + 
-                    "&field6=" + String(round2(C2H5OH)) + 
-                    "&field7=" + String(round2(CO)) + 
-                    "&field8=" + String(Gas);
-  postData(request1);
-
-  String request2 = "api_key=" + String(myWriteAPIKey2) + 
-                    "&field1=" + String((long)((temp + 140) * 10)) + 
-                    "&field2=" + String((long)((rh + 100) * 10)) + 
-                    "&field3=" + String(lat) + 
-                    "&field4=" + String(lng);
-  postData(request2);
+  String request = "api_key=" + String(myWriteAPIKey) + 
+                   "&field1=" + String(round2(Time)) + 
+                   "&field2=" + String(round4(Correction)) + 
+                   "&field3=" + String(round2(TheoreticalCO2)) + 
+                   "&field4=" + String(round2(CO2)) + 
+                   "&field5=" + String(round2(CH4)) + 
+                   "&field6=" + String(round2(C2H5OH)) + 
+                   "&field7=" + String(round2(CO)) + 
+                   "&field8=" + String(Gas) +
+                   "&field9=" + String((long)((temp + 140) * 10)) + 
+                   "&field10=" + String((long)((rh + 100) * 10)) + 
+                   "&field11=" + lat + 
+                   "&field12=" + lng;
+  postData(request);
 }
 
 void postData(String httpRequestData) {
