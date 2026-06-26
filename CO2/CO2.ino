@@ -4,22 +4,21 @@
 #include "MG811.h"
 #include <DHT.h>
 #include <WiFi.h>
-#include <TinyGPS++.h>
 #include <HTTPClient.h>
 #include <NetworkClientSecure.h>
+#include <Deneyap_GPSveGLONASSkonumBelirleyici.h>
 
 #define ADC_BIT_RESU (12)
 #define gasPin       (34)
 #define dhtPin       (33)
 
-const char* ssid = "Wokwi-GUEST";  
-const char* password = ""; 
+const char* ssid = "REPLACE_WITH_YOUR_SSID";  
+const char* password = "REPLACE_WITH_YOUR_PASSWORD";
 const char* serverName = "https://co2.uzay.info/datareceiver.php";
 
 static const char* myWriteAPIKey = "PWIFQRC3WHDW6YG5";
 
-HardwareSerial neogps(2); 
-TinyGPSPlus gps;
+GPS GPS;
 
 float startTime = 0;
 
@@ -28,7 +27,6 @@ bool windowLock = false;
 
 float sensorVal, CO2, CH4, C2H5OH, CO, TheoreticalCO2, temp, rh, Time, Correction;
 int Gas;
-String lat, lng;
 
 MG811 sensor(ADC_BIT_RESU, gasPin);
 DHT dht(dhtPin, DHT22);
@@ -45,12 +43,15 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  while(WiFi.status() != WL_CONNECTED) { 
+  while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
 
-  neogps.begin(9600, SERIAL_8N1, RX2, TX2);
+  if (!GPS.begin(0x2F)) {
+    delay(3000);
+    Serial.println("I2C connection failed."); 
+  }
 }
 
 void loop() {
@@ -97,17 +98,9 @@ void sendData() {
 
   Gas = analogRead(gasPin);
 
-  lat  = String((random(-90, 90) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 90) * pow(10,6)); 
-  lng = String((random(-180, 180) + (random(0, pow(10, 6) + 1) / pow(10, 7)) + 180) * pow(10,6)); 
-  if (neogps.available()) {
-    char c = neogps.read();
-    if (gps.encode(c)) {
-      if (gps.location.isValid()) {
-        lat  = String((gps.location.lat() + 90) * pow(10, 7)); 
-        lng = String((gps.location.lng() + 180) * pow(10, 7)); 
-      }
-    }
-  }
+  GPS.readGPS(RMC);
+  long lat = (long)((GPS.readLocationLat() + 90.0) * 10000000);
+  long lng = (long)((GPS.readLocationLng() + 180.0) * 10000000);
 
   String request = "api_key=" + String(myWriteAPIKey) + 
                    "&field1=" + String(round2(Time)) + 
@@ -120,8 +113,8 @@ void sendData() {
                    "&field8=" + String(Gas) +
                    "&field9=" + String((long)((temp + 140) * 10)) + 
                    "&field10=" + String((long)((rh + 100) * 10)) + 
-                   "&field11=" + lat + 
-                   "&field12=" + lng;
+                   "&field11=" + String(lat) + 
+                   "&field12=" + String(lng);
   postData(request);
 }
 
